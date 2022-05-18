@@ -1,85 +1,51 @@
-// use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-//
-// #[get("/")]
-// async fn hello() -> impl Responder {
-//     HttpResponse::Ok().body("Hello world!")
-// }
-//
-// #[post("/echo")]
-// async fn echo(req_body: String) -> impl Responder {
-//     HttpResponse::Ok().body(req_body)
-// }
-//
-// async fn manual_hello() -> impl Responder {
-//     HttpResponse::Ok().body("Hey there!")
-// }
-//
-//
-// #[actix_web::main]
-// async fn main() -> std::io::Result<()> {
-//     HttpServer::new(|| {
-//         App::new()
-//             .service(hello)
-//             .service(echo)
-//             .route("/hey", web::get().to(manual_hello))
-//     })
-//     .bind(("127.0.0.1", 8080))?
-//     .run()
-//     .await
-// }
+use actix_web::{
+    body::BoxBody, get, http::header::ContentType, web, App, HttpRequest, HttpResponse, HttpServer,
+    Responder,
+};
 
-// use actix_web::{get, web, App, HttpServer};
-//
-// // This struct represents state
-// struct AppState {
-//     app_name: String,
-// }
-//
-// #[get("/")]
-// async fn index(data: web::Data<AppState>) -> String {
-//     let app_name = &data.app_name; // <- get app_name
-//     format!("Hello {app_name}!") // <- response with app_name
-// }
-//
-// #[actix_web::main]
-// async fn main() -> std::io::Result<()> {
-//     HttpServer::new(|| {
-//         App::new()
-//             .app_data(web::Data::new(AppState {
-//                 app_name: String::from("Actic web"),
-//             }))
-//         .service(index)
-//     })
-//     .bind(("127.0.0.1", 8080))?
-//         .run()
-//         .await
-// }
-//
+use serde::Serialize;
 
-use actix_web::{get, web, App, HttpServer};
-use std::sync::Mutex;
-
-struct AppStateWithCounter {
-    counter: Mutex<i32>,
+#[derive(Serialize)]
+struct MyObj {
+    name: &'static str,
 }
 
-async fn index(data: web::Data<AppStateWithCounter>) -> String {
-    let mut counter = data.counter.lock().unwrap();
-    *counter += 1;
+// Responder
+impl Responder for MyObj {
+    type Body = BoxBody;
 
-    format!("Request number: {counter}")
+    fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
+        let body = serde_json::to_string(&self).unwrap();
+
+        // Create response and set content type
+        HttpResponse::Ok()
+            .content_type(ContentType::json())
+            .body(body)
+    }
+}
+
+#[get("/index")]
+async fn index() -> impl Responder {
+    MyObj { name: "user" }
+}
+
+#[get("/hello")]
+async fn hello() -> impl Responder {
+    HttpResponse::Ok().body("Hello world!")
+}
+
+#[get("/")]
+async fn static_index(_req: HttpRequest) -> impl Responder {
+    web::Bytes::from_static(b"Hello world!")
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let counter = web::Data::new(AppStateWithCounter {
-        counter: Mutex::new(0),
-    });
-
-    HttpServer::new(move || {
+    HttpServer::new(|| {
         App::new()
-            .app_data(counter.clone())
-            .route("/", web::get().to(index))
+            .service(hello)
+            .service(static_index)
+            .service(index)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
